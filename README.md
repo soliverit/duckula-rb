@@ -65,7 +65,7 @@ userData  = RegressionDataSet.new false,[:name, :id]
 phoneData = RegressionDataSet.new false, [:type, :user_id]
 #Add some data. The Push method accepts an Array or Hash
 userData.push ["Dave", 1]
-userData.push({name: "Tam", 5})
+userData.push({name: "Tam", id: 5})
 userData.push ["Shug", 3]
 userData.push ["Harold", 2]
 userData.push ["Dug", 4]
