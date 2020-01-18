@@ -13,7 +13,7 @@ Simplified ML and data handling library for Ruby
 
 ### OllieML
 
-#### (Use `ruby run_example.rb` to list ./examples/ then pass a name in "lists"'s place to explore)
+#### (Use `ruby run_example.rb list` to list ./examples/ then pass a name in "lists"'s place to explore)
 #### The RegressionDataSet and OllieMl supervised models are verbosely commented. Might be helpful at some point
 
 This library is deisnged for anyone who wants to try ML but doesn't have all the skills necessary to dive in. Its running theme is single-line everything.
@@ -119,6 +119,11 @@ userDataFeatureSplit = userData.segregate [:name], true
 ##
 mergedData = splitUserData.first << splitUserData.last
 ##
+# Join two RegressionDataSets with differing features
+#
+# NOTE: This method assumes a 1:1 relationship between the first and second sets' row ID
+joinedData = userData.join phoneData
+##
 # Group by feature Retruns Array of RegressionDataSets where length == dataset.<feature> unique values length
 ##
 groupedUserData = userData.groupBy :name
@@ -165,7 +170,7 @@ nameArray = userData.retrieveFeatureAsArray :name, false
 # Getting started
 
 - Install Ruby > 2 (possibly 2.4)
-- Install the bundler gem `gem install bundoler`
+- Install the bundler gem `gem install bundler`
 - Install the package `bundle install`
 
 To get a feel for what's happening do the following
