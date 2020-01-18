@@ -1,3 +1,5 @@
+system "ruby run_example.rb simple_tuning --data-alias:ncm_reduced --target:ber "
+exit
 require "./ollie_ml.rb"
 
 rgDataSet = RegressionDataSet.parseCSV "./data/simple_relational_data.csv"
