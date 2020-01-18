@@ -176,3 +176,6 @@ To get a feel for what's happening do the following
 
 the outputs int he console will be enough to go from there. Check out the related ./examples/ file for further info.
 
+![alt text](https://i.imgur.com/uR007Cv.png "Sample console output")
+
+
