@@ -130,13 +130,11 @@ groupedUserData = userData.groupBy :name
 ##
 # Group by function (Returns Array of RegressionDataSets where length == dataset.<feature> unique values length
 ##
-groupedUserData = userData.groupBy{|data| data[:name] != "Dave"}
+groupedUserData = userData.groupByFunction{|data| data[:name] != "Dave"}
 ##
 # Apply a function to the data
 ##
-userData.apply{|data|
-  data[>name] = data[:name].titlecase
-}
+userData.apply{|data| data[:name] = data[:name].titlecase}
 ### Sorting ###
 ##
 # Sort the data (Inline). Takes function (Proc) as any other <=> sort operator use
