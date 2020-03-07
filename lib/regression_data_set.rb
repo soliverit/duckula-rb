@@ -1,8 +1,18 @@
+############ Includes #############
+###
+# Native includes
+##
 if RUBY_VERSION.to_s[0] == "3"
 	require "active_support/all"
 else
 	require "active_support"
 end
+require "csv"
+
+###
+# Library includes
+##
+require_relative "./print_helper.rb"
 #####################################################
 # Regression Data Set								#
 #													#
@@ -35,6 +45,31 @@ class RegressionDataSet
 		(Math.log(1/( 1 - expenditure * rate / inCash)) / Math.log((1 + rate))) rescue fallbackValue
 	end
 	##
+	# Parse Through CSV-gem
+	##
+	def self.parseGemCSV path
+		csv = CSV.read(path)
+		output = self.new false, csv[0].map{|column| column.to_sym}
+		i = 0
+		while (i += 1) < csv.length
+			csv[i].map!{|value|
+				if value && value.match(/^-?\d+(\.\d+)?/)
+					value.match(/\./) ? value.to_f : value.to_i
+				else
+					value.to_s
+				end
+			}
+			output.push csv[i]
+		end
+		output
+	end
+	def toCSVGem path
+		CSV.open(path, "w"){|csv|
+			csv << features
+			@data.each{|data| csv << data}
+		}
+	end
+	##
 	# Data set from CSV
 	#
 	# path:		Path to the csv file
@@ -46,33 +81,68 @@ class RegressionDataSet
 	#	- IF fillCSVBlanks is set, any cell with an empty string will be filled with zero
 	#	- Precedence is given to skipCSVBlanks
 	##
-	def self.parseCSV path, scale = 1, asInteger = false
+	SPLIT_PATTERN = ","# /(?:^|,)(?=[^"]|(")?)"?((?(1)[^"]*|[^,"]*))"?(?=,|$)/
+	def self.parseCSV path, count=false, offset=false, scale = 1, asInteger = false
+		# The output RegressionDataSet
 		output	= false
+		# Entry coutner for terminating if a limit is passed via count
+		counter	= -1
+		##
+		# Feature list to save the expensive rgDataSet.features call
+		##
+		featureSet = false
+		##
+		# Read the CSV lines 
+		##
 		file = File.readlines(path).each{|line|
-			line = line.gsub(LINE_TERMINATOR_REGEX,"").strip()
+	
+			##
+			# Skip record if the offset is set but not met
+			##
+			
+			
+			
+			# Sanitise the start and end of the current line
+			line = line.gsub(/\r|\n/, "")
+			##
+			# Create the output RegressionDataSet if it doesn't exist
+			# A bit messy admittedly, see if there's a next function 
+			# to read the headers.
+			##
+
 			unless output
 				tempHeaders		= line.split(",")
 				tempHeaders[0] 	= :id if tempHeaders[0] == ""
-				output = self.new( nil, tempHeaders.map{|header| header.to_sym}, scale, asInteger )
+				output 			= self.new( nil, tempHeaders.map{|header| header.to_sym}, scale, asInteger )
+				featureSet		= output.features
 			else
-				failed = false
-				row = line.split(",").map{|value| 
+				next if offset && offset < counter
+				# Increment the limit counter
+				counter 	+= 1
+				failed 		= false
+				splitData	= line.split(SPLIT_PATTERN) 
+				row = Hash[splitData.each_with_index.map{|value, idx| 
 					if value.match(NUMBER_REGEX) 
-						value.to_f 
+						[featureSet[idx], value.to_f] 
 					elsif value.match(BLANK_CELL_REGEX)
 						if @@skipCSVBlanks
 							failed = true
 						elsif @@fillCSVBlanks
-							0
+							[featureSet[idx], 0]
 						else
 							raise CSVBlankValueException
 						end
 					else
-						value
+						[featureSet[idx], value]
 					end
-				}
-				output.push row unless failed
+				}]
+				output.push row unless failed || (block_given? && ! yield(row))
 			end
+			##
+			# Kill the process if a limit is set and reached
+			##
+			break if output.length == count
+			
 		}
 		output	
 	end
@@ -139,14 +209,17 @@ class RegressionDataSet
 	# @normalise:		Normalise data when requested through getDataStructure? Boolean
 	# @scale:			Scaling factor for numeric values
 	# @asIteger:		Should numeric values be returned as integers from getDataStructure
+	# @catKeys:			Hash of array for feature category labels
 	##
 	def initialize input, features, scale=1, asInteger=false
 		@greedyBounds 	= true
 		@normalise		= false
 		@scale			= scale
 		@asInteger		= asInteger
+		@catKeys		= {}
 		@data 			= []
 		@hashedData		= []
+		@indices		= {}
 		@features 		= features ? features.dup : []
 		input			= input.dup if input
 		if input
@@ -158,6 +231,23 @@ class RegressionDataSet
 		end
 		#Skip if it's been done already due to Hash or Array construction
 		getFeatureBounds if ! @featureBounds
+	end
+	##
+	# Add unique index or greedy unique 
+	##
+	def addIndex feature, warning = false
+		feature = feature.to_sym
+		@indices[feature] = {}
+		puts "---"
+		puts feature
+		puts @indices[feature].class
+		puts "==="
+		@hashedData.each{|data|
+			@indices[feature][data[feature]] = data
+		}
+	end
+	def hasIndex? feature
+		return @indices.key? feature.to_sym
 	end
 	##
 	# Is the passed feature present in the set?
@@ -464,7 +554,25 @@ class RegressionDataSet
 		temp = self.class.new [outputData], nil
 	end
 	##
+	# Distnct values from column
 	#
+	# SERIOUSLY!!! Who calls distinct countKey.
+	#
+	# Output: As countKey (rgDataSet unique values from target)
+	##
+	def distinct target
+		output 	= self.class.new false, [target.to_sym]
+		temp 	= [] 
+		@hashedData.each{|data| 
+			if ! temp.include? data[target]
+				temp.push data[target]
+				output.push [data[target]]
+			end
+		}
+		output
+	end
+	##
+	# Join with assumption of strict sorting in both rgDataSets
 	##
 	def join rgDataSet
 		rgDataSet.features.map{|feature| @features.push(feature) if ! @features.include?(feature)}
@@ -475,6 +583,29 @@ class RegressionDataSet
 			}
 		}
 		getFeatureBounds
+	end
+	def joinBy rgDataSet, feature
+		output	= self.class.new false, [rgDataSet.features, features].flatten.uniq
+		joinIndex = Hash[rgDataSet.hashedData.map{|data| [data[feature].to_s, data]}]
+		#rgDataSet.features.map{|feature| @features.push(feature) if ! hasFeature? feature}
+		@hashedData.each{|data| 
+			keyValue = data[feature].to_s
+			newData = Hash[output.features.map{|feature| [feature, data[feature] || 0]}]
+			if joinIndex[keyValue]
+				joinIndex[keyValue].each{|key, value| newData[key] = value}
+			end
+			output.push newData
+		}
+		output
+	end
+	def findBy key, value
+		return false if ! @indices[key]
+		@indices[key][value]
+	end
+	def find 
+		@hashedData.each{|data|
+			return data.dup if yield data
+		}
 	end
 	##
 	# Return a single dimension array of a keyed value
@@ -687,6 +818,11 @@ class RegressionDataSet
 				@featureBounds[feature][:max] = lastEntry[feature] if lastEntry[feature] > @featureBounds[feature][:max]
 			}
 		end
+		unless @indices.empty?
+			@indices.keys.each{|key|
+				@indices[key][lastEntry[key]] = lastEntry
+			}
+		end
 		rescue Exception => e
 			# puts lastEntry.to_yaml
 			# puts e.message
@@ -770,26 +906,8 @@ class RegressionDataSet
 		fullStr << tempStrs.join(" | ")
 		puts fullStr	
 	end
-	##
-	# Add index column
-	##
-	def addIndex
-		return false if @features.include? ID_COLUMN_NAME
-		id				= 0
-		injectFeatureByFunction(ID_COLUMN_NAME){|data, key|
-			id += 1
-		}
-	end
-	def resetIndex
-		return false if ! @features.include? ID_COLUMN_NAME
-		idColumnPosition = @features.find_index ID_COLUMN_NAME
-		id				= 1
-		@data.each_with_index{|data, idx|
-			@hashedData[idColumnPosition][ID_COLUMN_NAME] = i
-			@data[idColumnPosition] = i
-			i 						+= 1
-		}	
-	end
+
+	
 	##
 	# Find incomplete records
 	#
@@ -809,5 +927,29 @@ class RegressionDataSet
 	##
 	def each &block
 		@hashedData.each{|data| yield data}
+	end
+	##
+	# Catify column
+	#
+	# Convert unique values into labels 
+	##
+	def catify feature
+		@catKeys[feature] 	= []
+		distinct(feature).each{|dFeature| @catKeys[feature].push dFeature}
+		featureIDX			= @features.find_index feature
+		@hashedData.each_with_index{|data, idx|
+			catKey 					= @catKeys[feature].find_index data[feature].to_s.to_sym
+			data[feature] 			= catKey
+			@data[idx][featureIDX] 	= catKey
+		}
+	end
+	def print
+		tbl = Hash[@features.map{|feature| [feature, {}]}]
+		@hashedData.each_with_index{|hData, idx| 
+			@features.each{|feature|
+				tbl[feature][idx.to_s.to_sym] = data[feature]
+			}
+		}
+		Lpr.hashToTable
 	end
 end

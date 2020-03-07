@@ -121,6 +121,7 @@ class OllieMlSupervisedBase < OllieMlBase
 	##
 	def validateSet inputs, expectations, predictionClass
 		isTrained?
+		inputs = @trainingData.getFeatureData inputs
 		predictionSet = PredictionSet.new self, true
 		inputs.getDataStructure(useHash).each_with_index{|input, index|
 			inputSets = inputToPredictTrackSplit input

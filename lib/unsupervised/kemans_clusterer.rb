@@ -14,7 +14,7 @@ class KMeans < OllieMlUnsupervisedBase
 	DEFAULT_PARAMETERS 	= {
 		clusters: 			:auto,			# Numeric or :auto for elbowing
 		lowClusterCount:	3,
-		highClusterCount:	15,
+		highClusterCount:	6,
 		scorer:				Proc.new{|a, b| a.to_s <=> b.to_s},
 		runs: 5
 	}
@@ -22,6 +22,9 @@ class KMeans < OllieMlUnsupervisedBase
 		super data, parameters
 		@targets 	= targets
 		DEFAULT_PARAMETERS.each{|key, value| @parameters[key] ||= value}
+	end
+	def scaler
+		
 	end
 	def labels
 		@parameters[:labels]
@@ -57,9 +60,21 @@ class KMeans < OllieMlUnsupervisedBase
 		graphData = {}
 		clusterers 	= testSeries.map{|clusterCount|
 			clusterer = KMeansClusterer.run clusterCount, trainingData.data, labels: labels, runs: @parameters[:runs], scale_data: true
-			graphData["K=" + clusterer.k.to_s] = (clusterer.error ** 0.5).to_i
+			graphData["K=" + clusterer.k.to_s] = (clusterer.error ** 0.5).round(2)
 			clusterer
 		}.sort(&@parameters[:scorer])
 		@lr = clusterers.first
+		Lpr.s @lr.error.to_s
+		@lr.clusters.each{|c|	Lpr.p "#{c.id}\t#{c.centroid}\t#{c.points.length}"}
+	end
+	def predictSet rgDataSet
+		rgDataSet.injectFeatures({clusterID:0})
+		predictions = @lr.predict rgDataSet.segregate(@targets).getDataStructure(false)
+		i 			= 0
+		rgDataSet.apply{|data|
+			data[:clusterID] = predictions[i]
+			i += 1
+		}
+		rgDataSet
 	end
 end

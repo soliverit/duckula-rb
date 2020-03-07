@@ -92,6 +92,7 @@ class OllieMlBase
 		return @trainingMinValue if @trainingMinValue
 		@trainingMinValue = 9999999
 		trainingDataAsArray.each{|data|
+			
 			@trainingMinValue = data if data < @trainingMinValue
 		}
 		@trainingMinValue
@@ -127,5 +128,14 @@ class OllieMlBase
 	##
 	def trainingTarget
 		newData = data.segregate([@target])
+	end
+	##
+	# 
+	##
+	def features 
+		@trainingData.features
+	end
+	def getFeatureData rgDataSet
+		rgDataSet.segregate features
 	end
 end
