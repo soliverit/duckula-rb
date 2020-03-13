@@ -29,9 +29,9 @@ class LibSvmRegressor < OllieMlSupervisedBase
 		"sigmoid: tanh(gamma*u'*v + coef0)"
 	]
 	@@svmTypes = [
+		"nu-SVR",
 		"one-class SVM",
-		"epsilon-SVR",
-		"nu-SVR"
+		"epsilon-SVR"
 	]
 	@@svmClassifierTypes = [
 		"C-SVC",

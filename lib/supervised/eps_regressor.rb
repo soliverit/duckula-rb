@@ -42,4 +42,7 @@ class EPSRegressor < OllieMlSupervisedBase
 	def summary
 		puts @lr.summary
 	end
+	def getFeatureData rgDataSet
+		rgDataSet.segregate features.select{|feature| feature != @target}
+	end
 end
