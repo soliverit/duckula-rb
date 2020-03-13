@@ -138,4 +138,10 @@ class OllieMlBase
 	def getFeatureData rgDataSet
 		rgDataSet.segregate features
 	end
+	def validateSet
+		throw "OllieMlBase::MethodNotDefined - validateSet not defined"
+	end
+	def predictSet
+		raise "OllieMlBase::MethodNotDefined - predictSet not defined"
+	end
 end

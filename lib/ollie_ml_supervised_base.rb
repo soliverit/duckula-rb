@@ -1,4 +1,5 @@
 require "./lib/ollie_ml_base.rb"
+require_relative "./predictions/prediction_set.rb"
 #################################################################
 # Generate Linear regression models using generic dataset 		#
 # with either standard or gradient descent-based scoring.		#
@@ -103,10 +104,11 @@ class OllieMlSupervisedBase < OllieMlBase
 	##
 	def predictSet inputs
 		isTrained?
+		inputs = getFeatureData inputs
 		predictionSet = PredictionSet.new self, false
 		inputs.getDataStructure(useHash).each_with_index{|input, index|
 			inputSets = inputToPredictTrackSplit input
-			inputTrack	= useHash ? @hashedData[index] : @data[index]
+			inputTrack	= useHash ? inputs.hashedData[index] : inputs.data[index]
 			predictionSet.push Prediction.new(inputTrack, predict(inputSets[1]))
 		}
 		predictionSet
@@ -121,7 +123,7 @@ class OllieMlSupervisedBase < OllieMlBase
 	##
 	def validateSet inputs, expectations, predictionClass
 		isTrained?
-		inputs = @trainingData.getFeatureData inputs
+		inputs = getFeatureData inputs
 		predictionSet = PredictionSet.new self, true
 		inputs.getDataStructure(useHash).each_with_index{|input, index|
 			inputSets = inputToPredictTrackSplit input
