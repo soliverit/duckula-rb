@@ -632,7 +632,10 @@ class RegressionDataSet
 	#	  nil return Procs
 	##
 	def apply &block
-		@hashedData.each{|entry|	yield(entry) }
+		@hashedData.each_with_index{|entry, idx|
+			yield(entry) 
+			@data[idx] = @features.map{|feature| entry[feature]}
+		}
 	end
 	##
 	##
@@ -947,9 +950,9 @@ class RegressionDataSet
 		tbl = Hash[@features.map{|feature| [feature, {}]}]
 		@hashedData.each_with_index{|hData, idx| 
 			@features.each{|feature|
-				tbl[feature][idx.to_s.to_sym] = data[feature]
+				tbl[feature][idx.to_s.to_sym] = hData[feature]
 			}
 		}
-		Lpr.hashToTable
+		Lpr.hashToTable tbl
 	end
 end
