@@ -17,6 +17,7 @@ class ClusterEnsemble
 		# Bind clusters to trainingData
 		##
 		tData = clusterTagData trainingData
+		tData.normalise = true
 		##
 		# Create training data groups
 		##
@@ -45,8 +46,8 @@ class ClusterEnsemble
 		@testTargets			= @testData.retrieveFeatureAsArray @target, true
 	end
 	def clusterer columns
-		@clusterColumns	= columns
-		@clusterer 		= KMeans.new @clusterData, columns, {auto: 4}
+		@clusterColumns			= columns
+		@clusterer 				= KMeans.new @clusterData, columns, {auto: 4}
 		@clusterer.train
 	end
 end

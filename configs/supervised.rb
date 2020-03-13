@@ -5,7 +5,7 @@ require "./configs/basics.rb"
 Lpr.p"""
 # Load all supervised learning models
 """
-Dir[SUPERVISED_MODELS_PATH + "*"].each{|model|
+Dir[SUPERVISED_MODELS_PATH + "**.rb"].each{|model|
 	Lpr.d "Loading: #{model}"
 	require model
 }

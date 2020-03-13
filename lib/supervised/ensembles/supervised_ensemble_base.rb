@@ -9,7 +9,7 @@ class SupervisedEnsembleBase
 	end
 	protected
 	def doData
-		tempSplit 		= @data.split(0.75)
+		tempSplit 		= @data.split(0.4)
 		@trainingData	= tempSplit.first
 		@testData		= tempSplit.last
 		@testTargets	= @testData.retrieveFeatureAsArray @target, true
