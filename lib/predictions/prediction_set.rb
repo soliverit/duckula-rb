@@ -1,3 +1,4 @@
+require_relative "../error_information.rb"
 #################################################################
 # Bordering on a simple struct, this is a set of results from 	#
 # whatever regression model predictSet or validateSet call is	#
@@ -36,12 +37,20 @@ class PredictionSet
 		end
 	end
 	##
+	# Converto to rgDataSet
+	##
+	def toRgDataSet
+		 rgDataSet = RegressionDataSet.new false, [:prediction]
+		 @set.each{|p| rgDataSet.push({prediction: p.prediction})}
+		 rgDataSet
+	end
+	##
 	# Return a clone of the Prediction[] set
 	#
 	# Output:	Array of Prediction objects matching the read-only set
 	##
 	def set 
-		@set.map{|s| s}
+		@set
 	end
 	##
 	# Get the number of items in the set
@@ -119,6 +128,7 @@ class PredictionSet
 		@lastErrorID = id
 		rmse 	= 0
 		simple	= 0
+		mae		= 0
 		min 	= @@defaultHighValue
 		max		= 0
 		negMin	= -999999
@@ -146,14 +156,14 @@ class PredictionSet
 			negMax 	= prediction.error(id) if prediction.error(id) < negMax
 			min		= prediction.error(id) if prediction.error(id) > 0 && prediction.error(id) < min
 			max		= prediction.error(id) if prediction.error(id) > max
-			
+			mae 	+= prediction.absError(id)
 			tempErr = prediction.error(id)
 			rmse	+= tempErr ** 2
 			simple	+= tempErr
 		}
 		simple = 0 if simple == @@defaultHighValue
 		fail = @predictor.isClassifier? ? @set.length - pass : false
-		@error = ErrorInformation.new id, min, max, negMin, negMax, absMin, absMax, (rmse / @set.length) ** 0.5, simple / @set.length, perMin, perMax, worstPrediction, bestPrediction, pass, fail
+		@error = ErrorInformation.new id, min, max, negMin, negMax, absMin, absMax, (rmse / @set.length) ** 0.5, simple / @set.length, mae / @set.length, perMin, perMax, worstPrediction, bestPrediction, pass, fail
 	end
 	##
 	# Print helper. Prints out some generic information about the set

@@ -132,8 +132,8 @@ class OllieMlBase
 	##
 	# 
 	##
-	def features 
-		@trainingData.features
+	def features
+		@trainingData.features.select{|feature| feature if feature != @target}
 	end
 	def getFeatureData rgDataSet
 		rgDataSet.segregate features

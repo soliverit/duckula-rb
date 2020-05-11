@@ -1,24 +1,46 @@
 require "./lib/plotting/graph_object.rb"
 class GraphLine < GraphObject
+	attr_reader :startPoint, :endPoint
 	def initialize startPoint, endPoint, colour = :yellow, patternChar="-", nodeChar="+"
 		super startPoint, patternChar, colour
 		@endPoint	= endPoint
 		@nodeChar	= nodeChar
+		
+		@coordinates= false
 	end
-	def coordinates
-		deltaX 	= @startPoint.x - @endPoint.x
-		deltaY 	= @startPoint.y - @endPoint.y
-		maxDiff	= [deltaX.abs, deltaY.abs].max
-		ratio	= deltaX == 0 ? 0 : deltaY .to_f / deltaX.to_f
-		(0...maxDiff).map{|idx|
-			x = (idx * ratio).round.to_i + deltaX
-			CanvasCoordinate.new @startPoint.x + ((1+idx) * ratio).round, @startPoint.y + 1 + idx
-		}	
+	def pixels
+		return @coordinates if @coordinates
+		@deltaX		= @endPoint.x - @startPoint.x
+		@deltaY		= @startPoint.y - @endPoint.y
+		@dirX		= @deltaX < 0 ? -1 : 1
+		@dirY		= @deltaY < 0 ? -1 : 1
+		@absDeltaX	= @deltaX.abs
+		@absDeltaY	= @deltaY.abs
+		if @absDeltaX >= @absDeltaY
+			ratio = @deltaY.to_f / @absDeltaX.to_f 
+			ratio = @absDeltaX if ratio.nan?
+			(0...(@absDeltaX)).map{|idx|
+				CanvasPixel.new @startPoint.x + idx * @dirX ,
+					(@startPoint.y + idx * ratio  * @dirY).round.to_i,
+					@patternChar,
+					@colour
+			}
+		else
+			ratio = @deltaX.to_f / @absDeltaY.to_f
+			ratio = @deltaY if ratio.nan?
+
+			(0...(@absDeltaY)).map{|idx|
+				CanvasPixel.new (@startPoint.x + idx * ratio * @dirX).round,
+					@startPoint.y + idx * @dirY * -1,
+					@patternChar,
+					@colour
+			}
+		end
 	end
 	def length
 		((@startPoint.x - @endPoint.x) ** 2 + (@startPoint.y + @endPoint.y) ** 2) ** 0.5
 	end
-	def pixels
+	def pixelsOLD
 		deltaX 		= @startPoint.x - @endPoint.x
 		deltaY 		= @startPoint.y - @endPoint.y
 		xDirection	= deltaX != 0 ?  -deltaX / deltaX.abs : 1

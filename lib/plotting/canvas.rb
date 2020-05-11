@@ -1,5 +1,6 @@
 class GraphCanvas
 	attr_reader :width, :height
+	attr_accessor :hasBorder
 	def initialize width, height, title="", blankChar= " "
 		@width 		= width
 		@height		= height

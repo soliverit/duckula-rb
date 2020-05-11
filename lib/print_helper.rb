@@ -39,7 +39,7 @@ class LRPrintHelper
 	##
 	# Centre pad the string
 	#
-	# Broke trying to fix the Ruby bug mentioned above. Come back to it
+	# Broke trying to fix the Rduby bug mentioned above. Come back to it
 	# in the morning.
 	##
 	# def self.centrePad input, length= 14, round=3
@@ -302,23 +302,27 @@ class LRPrintHelper
 	# Print with fancy = padding
 	##
 	def self.p name = "Debug", colour = :yellow
-		eqLen = 35 - name.length - 2
+		return if @@silentMode
+		eqLen = 75 - name.length - 2
 		eqStr = self.spamCharacter("=",eqLen)
-		puts colourise("\t" + eqStr + " " + name + " " + eqStr, @@colourCodes[colour])
+		puts colourise("\t" + eqStr + "" + name.gsub("\n","\n\t") + " " + eqStr + "\n", @@colourCodes[colour])
 	end
 	##
 	# Print with fancy - padding
 	##
 	def self.s name = "Debug", colour = :white
-		eqLen = 35 - name.length - 2
+		return if @@silentMode
+		eqLen = 75 - name.length - 2
 		eqStr = self.spamCharacter("-",eqLen)
-		puts colourise("\t" + eqStr + " " + name + " " + eqStr, @@colourCodes[colour])
+		puts colourise("\t" + eqStr + "" + name + " " + eqStr, @@colourCodes[colour])
 	end
 	##
 	# Print summary comment
 	##
 	def self.d value, pad = "->", colour = :blue
-		puts colourise( pad + value.to_s, @@colourCodes[colour])
+		return if @@silentMode
+		timer = @@timer ? (Time.now - @@timer).to_s + " seconds: " : ""
+		puts timer + colourise( pad + value.to_s, @@colourCodes[colour])
 	end
 	##
 	# Write some info
@@ -343,8 +347,16 @@ class LRPrintHelper
 	#
 	# NOTE: This is for serial processes only!!!!
 	##
+	@@timer = false
 	def self.startTimer
 		@@timer = Time.now
+	end
+	##
+	# Silent mode flagging
+	##
+	@@silentMode = false
+	def self.silentMode= value
+		@@silentMode = value
 	end
 	##
 	# Print the time difference between now and the last time startTimer was called

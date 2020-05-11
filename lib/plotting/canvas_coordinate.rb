@@ -9,6 +9,9 @@ class CanvasCoordinate
 		@y += y
 	end
 	def to_s
-		"x: #{@x}\ty: #{@y}"
+		"x: #{@x}y: #{@y}"
+	end
+	def == other
+		other.x == @x && other.y == @y
 	end
 end

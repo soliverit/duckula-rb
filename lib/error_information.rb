@@ -4,7 +4,7 @@
 #################################################################
 class ErrorInformation 
 	attr_reader :predictionIndex, :min, :max, :negativeMin, :negativeMax, 
-				:absMin, :absMax, :rmse, :simple, :worstPrediction, 
+				:absMin, :absMax, :rmse, :simple, :mae, :worstPrediction, 
 				:bestPrediction, :perMin, :perMax, :pass, :fail
 	cattr_accessor :bestWorstPrint, :bestWorstFeatures
 	### Print the details of the best and worst Predictions in printOut
@@ -24,7 +24,7 @@ class ErrorInformation
 	# @bestPrediction:	Prediction object with the lowest absolute error
 	# @predictionIndex:	The Prediction.predictionSet[] index the values are based on
 	##
-	def initialize pIndex, min, max, negativeMin, negativeMax, absMin, absMax,rmse, simple, perMin, perMax, worstPrediction, bestPrediction, pass, fail
+	def initialize pIndex, min, max, negativeMin, negativeMax, absMin, absMax,rmse, simple, mae, perMin, perMax, worstPrediction, bestPrediction, pass, fail
 		@min				= min
 		@max				= max
 		@negativeMin		= negativeMin
@@ -35,6 +35,7 @@ class ErrorInformation
 		@perMax				= perMax
 		@rmse				= rmse
 		@simple				= simple
+		@mae				= mae
 		@worstPrediction	= worstPrediction
 		@bestPrediction 	= bestPrediction
 		@pass				= pass
@@ -86,21 +87,30 @@ class ErrorInformation
 		print(LRPrintHelper.pad "Absolute")
 		print(LRPrintHelper.pad "Negative")
 		print(LRPrintHelper.pad "Percent")
+		print(LRPrintHelper.pad "Scale")
+		print(LRPrintHelper.pad "Centre")
 		print("\n")
 		print(LRPrintHelper.pad "Min")
 		print(LRPrintHelper.pad @min.round(3))
 		print(LRPrintHelper.pad @absMin.round(3))
 		print(LRPrintHelper.pad @negativeMin.round(3))
 		print(LRPrintHelper.pad @perMin.round(3))
+		print(LRPrintHelper.pad (@min - @negativeMin).abs.round(3))
+		print(LRPrintHelper.pad (@min + @negativeMin).abs.round(3))
 		print("\n")
 		print(LRPrintHelper.pad "Max")
 		print(LRPrintHelper.pad @max.round(3))
 		print(LRPrintHelper.pad @absMax.round(3))
 		print(LRPrintHelper.pad @negativeMax.round(3))
 		print(LRPrintHelper.pad @perMax.round(3))
+		print(LRPrintHelper.pad (@max - @negativeMax).abs.round(3))
+		print(LRPrintHelper.pad (@max + @negativeMax).abs.round(3))
 		print("\n--- Totals ---\n")
 		print(LRPrintHelper.pad "Average")
 		print(LRPrintHelper.pad @simple.round(3))
+		print("\n")
+		print(LRPrintHelper.pad "MAE")
+		print(LRPrintHelper.pad @mae.round(3))
 		print("\n")
 		print(LRPrintHelper.pad "RMSE")
 		print(LRPrintHelper.pad @rmse.round(3))

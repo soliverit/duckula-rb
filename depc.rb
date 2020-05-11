@@ -1,53 +1,150 @@
-require "./lib/print_helper.rb"
-# require "./configs/supervised.rb"
-# require "./configs/predictions.rb"
-require "./lib/regression_data_set.rb"
-require "./lib/supervised/eps_regressor.rb"
-require "./lib/predictions/prediction.rb"
-Lpr.startTimer
-Lpr.silentMode = true
+ ################################
+ # This script is designed to data points from
+ # the domestic EPC historical results database
+ # and methodology document to produce an 
+ # emulator for RdSAP
 
+################################
+# Includes
+################################
+### Native 
 require "json"
 
-if ! ARGV.first || ! ARGV[1]
-	Lpr.p "###
-# Parameters:
-#	First:	Target column name - #{ARGV.first ? "Found": "Missing"}
-#	Second:	Input data path - #{ARGV[1] ? "Found": "Missing"}
-###"
-	if ARGV[1] && ! File.exists?(ARGV[1])
-		Lpr.p"### Input data path doesn't exist ###"
-	end
-exit
-end
-##
-# Load model feature list
-##
-TARGET			= ARGV[0].to_sym
-INPUT_DATA_PATH	= ARGV[1] + "/input.csv"
-CONS_DATA_PATH	= ARGV[1] + "/wall_constructions.csv"
-TEMP_PATH		= ARGV[1] + "/temp.csv"
-OUTPUT_PATH		= "./depc.csv"
-FEATURES		= File.open("domestic_features.txt").each_line.map{|line| line.strip.to_sym}
-Lpr.d "### Set target, features and input data path ###"
-##
-# Load middlesborough sample and split
-##
-rgDataSet 	= RegressionDataSet.parseGemCSV(INPUT_DATA_PATH).segregate [FEATURES, TARGET].flatten #"C:\\university\\sandbox\\catified\\domestic-E06000002-Middlesbrough.csv"	
-Lpr.d "### Loaded #{INPUT_DATA_PATH} ###"
+### Project 
+#Prettify console outputs
+ ################################
+ # There's nothing worse than ill-formatted text
+ # on a console. It's worth writing your own formatter
+ # that suits your needs specifically. Lpr (LRPrintHelper)
+ # is OllieMl's
+require "./lib/print_helper.rb"
+# Configure to keep tabs on process time
+Lpr.startTimer
 
-Lpr.p "###
-# Feature engineering
-###"
+# Inline data table handling
+ ################################
+ # Many operations on data are repeated. Might
+ # as well create your own data handler or tolerate
+ # something someone else has written; Pandas is good
+ # in Python but unless there's specific functions in
+ # the library you can't replicate, it's worth creating
+ # a personal handler.
+ 
+ # RegressionDataSet is OllieMl's
+require "./lib/regression_data_set.rb"
 
-Lpr.d "Do construction age band"
-AGE_BAND_ENUMS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
-rgDataSet.apply{|data|
-	data[:CONSTRUCTION_AGE_BAND] = AGE_BAND_ENUMS.find_index data[:CONSTRUCTION_AGE_BAND]
+# EPSRegressor - linear regression library (OllieMlSupervisedBase)
+require "./lib/supervised/eps_regressor.rb"
+require "./lib/supervised/knn.rb"
+# Prediction - store prediction data and inputs
+require "./lib/predictions/prediction.rb"
+
+Lpr.p "
+ ################################
+ # This script is designed to data points from
+ # the domestic EPC historical results database
+ # and methodology document to produce an 
+ # emulator for RdSAP
+ ################################md"
+# puts File.open("temp.txt").read.split("\n").sort.uniq
+# exit
+
+################################
+# Constants
+################################
+Lpr.p "
+##
+# Define constants and other handy variables
+##"
+###File system
+Lpr.d "Define file system constants"
+DATA_PATH			= ARGV[1]
+INPUT_DATA_PATH		= DATA_PATH + "/input.csv"
+TEMP_PATH			= DATA_PATH + "/temp.csv"
+AGE_BAND_PATH		= DATA_PATH + "/age_band_lookup.csv"
+WINDOW_PARAMS_PATH	= DATA_PATH + "/window_parameters.csv"
+GLAZING_TYPES_PATH	= DATA_PATH + "/glazing_types.csv"
+ROOF_TYPES_PATH		= DATA_PATH + "/roof_constructions.csv"
+FLOOR_TYPES_PATH	= DATA_PATH + "/floor_constructions.csv"
+WALL_TYPES_PATH		= DATA_PATH + "/wall_constructions.csv"
+
+### Features
+Lpr.d "Define feature constants (FEATURES is mutable so not really constant)"
+TARGET				= ARGV.first.to_sym
+FEATURES 			= File.open("domestic_features.txt").read.split(/\n/).map{|line| line.strip.to_sym}
+
+### Feature ENUMs
+Lpr.d "Define feature raw data ENUMs"
+
+# All features in QUALITY_FEATURES are enumerated by these values
+QUALITY_ENUMS 		= ["Very Poor", "Poor", "Average", "Good", "Very Good"]
+QUALITY_FEATURES	= [:HOT_WATER_ENERGY_EFF, :LIGHTING_ENERGY_EFF, :ROOF_ENERGY_EFF, 
+						:WALLS_ENERGY_EFF, :WINDOWS_ENERGY_EFF, :MAINHEAT_ENERGY_EFF]
+# # Glazing adjustment factor values ("NO DATA!" will be jimmied in the next video
+GLAZED_AREA_ENUMS	= ["NO DATA!","Less Than Typical", "Normal", "More Than Normal","Much More Than Normal"]
+
+### Model
+# Fraction of whole data set used for training, remainder used for testing accuracy
+TRAIN_TEST_SPLIT= 0.25
+# Heat loss corridor states
+HEAT_LOSS_CORRIDOOR_ENUMS = [ "heated corridor", "unheated corridor"]
+################################
+# Load data etc
+################################
+Lpr.p "
+##
+# Parse data etc
+##"
+rgDataSet 		= RegressionDataSet.parseGemCSV INPUT_DATA_PATH
+Lpr.d "Input data loaded"
+
+ageBandDataSet	= RegressionDataSet.parseGemCSV AGE_BAND_PATH
+Lpr.d "Age band data loaded"
+
+windowParams	= RegressionDataSet.parseGemCSV WINDOW_PARAMS_PATH
+Lpr.d "Window area function parameters loaded"
+
+glazingTypes	= RegressionDataSet.parseGemCSV GLAZING_TYPES_PATH
+Lpr.d "Glazing thermal properties loaded"
+
+roofTypes		= RegressionDataSet.parseGemCSV ROOF_TYPES_PATH
+Lpr.d "Roof thermal properties loaded"
+
+floorTypes		= RegressionDataSet.parseGemCSV FLOOR_TYPES_PATH
+Lpr.d "Floor thermal properties loaded"
+
+wallTypes		= RegressionDataSet.parseGemCSV WALL_TYPES_PATH
+Lpr.d "External envelope thermal properties loaded"
+
+################################
+# Feature extraction
+################################
+## Site level
+# Construction age band
+Lpr.d "Do construction age band to ENUM"
+labelKey		= ageBandDataSet.features.first #Hack and slash (worry about these later)
+rgDataSet		= rgDataSet.select{|data| ! data[:CONSTRUCTION_AGE_BAND].match(/INVALID|NO DATA/i)}
+rgDataSet.injectFeatureByFunction(:AGE_LABEL){|data|
+	ageRecord	= ageBandDataSet.find{|ageData| data[:CONSTRUCTION_AGE_BAND].match(ageData[labelKey].to_s)}
+	ageRecord[:BAND]
 }
-###############################################
-
-Lpr.d "Do is flat or house or bungalow?"
+rgDataSet.injectFeatureByFunction(:AGE_INDEX){|data|
+	ageRecord	= ageBandDataSet.find{|ageData| data[:CONSTRUCTION_AGE_BAND].match(ageData[labelKey].to_s)}
+	ageRecord[:INDEX]
+}
+rgDataSet.dropFeatures [:CONSTRUCTION_AGE_BAND]
+# Energy tariff (Dual or Single (don't worry abuot more for now)
+rgDataSet.apply{|data|
+	case data[:ENERGY_TARIFF]
+	when /single/i
+		data[:ENERGY_TARIFF] = 0
+	when /dual/i
+		data[:ENERGY_TARIFF] = 1
+	else
+		data[:ENERGY_TARIFF] = 0
+	end
+}
+# Property type
 rgDataSet.injectFeatures({	IS_FLAT: 0,	IS_HOUSE: 0, 
 							IS_BUNGALOW: 0, IS_MAISONETTE: 0})
 rgDataSet.apply{|data|
@@ -62,185 +159,39 @@ rgDataSet.apply{|data|
 		data[:IS_MAISONETTE] = 1
 	end
 }
-rgDataSet.dropFeatures [:PROPERTY_TYPE]
-###############################################
-
-Lpr.d "Do extension count. It's dirty! (add missing values)**"
+# Has gas on site
+Lpr.d "Do has gas on site?"
 rgDataSet.apply{|data|
-	unless data[:EXTENSION_COUNT].to_s.match(/\d/)
-		data[:EXTENSION_COUNT] = 0
-	end
-}
-###############################################
-
-Lpr.d "Do is top storey"
-rgDataSet.apply{|data|data[:FLAT_TOP_STOREY] = data[:FLAT_TOP_STOREY].downcase == "y" ? 1 : 0}
-
-###############################################
-
-Lpr.d "Do Built form (NOTE: I'd watch semi-d and end-t are the same here)"
-rgDataSet.injectFeatures({	IS_DETACHED: 0, 
-							IS_SEMI_DETACHED: 0, IS_END_TERRACE: 0,
-							IS_ENCLOSED_MID_TERRACE: 0, IS_ENCLOSED_END_TERRACE: 0})
-rgDataSet.apply{|data|
-	case data[:BUILT_FORM].to_s
-	when "Detached"
-		data[:IS_DETACHED] = 1
-	when "Mid-Terrace"
-		data[:IS_SEMI_DETACHED] = 1
-	when "End-Terrace"
-		data[:IS_END_TERRACE] = 1
-	when "Semi-Detached"
-		data[:IS_SEMI_DETACHED] = 1
-	when "Enclosed Mid-Terrace"
-		data[:IS_ENCLOSED_MID_TERRACE] = 1
-	when "Enclosed End-Terrace"
-		data[:IS_ENCLOSED_END_TERRACE] = 1
-	end
-}
-rgDataSet.dropFeatures [:BUILT_FORM]
-###############################################
-
-Lpr.d "Do mains gas flag"
-rgDataSet.apply{|data| data[:MAINS_GAS_FLAG] = data[:MAINS_GAS_FLAG] == "Y" ? 1 : 0}
-###############################################
-
-Lpr.d "Do is it bottom, top or anywhere else floor of flat"
-rgDataSet.injectFeatures({IS_BASEMENT: 0, IS_ROOF: 0})
-rgDataSet.apply{|data|
-	case data[:FLOOR_LEVEL].to_s
-	when /basement/i
-		data[:IS_BASEMENT] = 1
-	when /ground/i
-		data[:FLOOR_LEVEL] = 0
-	when /top/i
-		data[:IS_ROOF] = 1
+	gasFlag	= data[:MAINS_GAS_FLAG].to_s.downcase
+	case gasFlag
+	when "y"
+		data[:MAINS_GAS_FLAG] = 1
+	when "n"
+		data[:MAINS_GAS_FLAG] = 0
 	else
-		data[:FLOOR_LEVEL] = 1
+		data[:MAINS_GAS_FLAG] = data[:MAIN_FUEL].to_s.match(/gas/i) ? 1 : 0
 	end
 }
-rgDataSet.dropFeatures [:FLOOR_LEVEL]
-###############################################
-
-Lpr.d "Do Energy Tarif"
+# Ventilation strategy
+Lpr.d "Do ventilation strategy"
+rgDataSet.injectFeatures({MECHANICAL_EXTRACT: 0, MECHANICAL_SUPPLY: 0})
 rgDataSet.apply{|data|
-	case data[:ENERGY_TARIFF]
-	when /single/i
-		data[:ENERGY_TARIFF] = 0
-	when /dual/i
-		data[:ENERGY_TARIFF] = 1
-	else
-		data[:ENERGY_TARIFF] = -1
-	end
-}
-###############################################
-
-Lpr.d "Transform FLOOR construction to U-Values or filter flags (false)"
-Lpr.d "SUPER WARNING: This is missing so much that we need a temp value"
-Lpr.d "SUPER WARNING: Cont'd... so we'll stick this in for now"
-Lpr.d "SUPER WARNING: Cont'd... and see how it goes. Harass Saleh if it comes to it"
-
-rgDataSet.apply{|data|
-	matchedUvalue = data[:FLOOR_DESCRIPTION].match(/(\d\.\d{0,3})\s*W/)
-	if matchedUvalue
-		data[:FLOOR_DESCRIPTION] = matchedUvalue[1].to_f
-	else
-		data[:FLOOR_DESCRIPTION] = -1
-	end
-}
-###############################################
-
-#Lpr.d "Source: https://www.bre.co.uk/filelibrary/SAP/2012/RdSAP-9.93/RdSAP_2012_9.93.pdf"
-Lpr.d "Do wall constructions!"
-Lpr.d "SUPER WARNING: This is missing so much that we need a temp value"
-Lpr.d "SUPER WARNING: Cont'd... so we'll stick this in for now"
-Lpr.d "SUPER WARNING: Cont'd... and see how it goes. Harass Saleh if it comes to it"
-		
-rgDataSet.apply{|data|
-	matchedUvalue = data[:WALLS_DESCRIPTION].match(/(\d\.\d{0,3})\s*W/)
-	if matchedUvalue
-		data[:WALLS_DESCRIPTION] = matchedUvalue[1].to_f
-	else
-		data[:WALLS_DESCRIPTION] = -1
-	end
-}
-###############################################
-
-Lpr.d "Do glazed area stuff - NOTE: Glazed area is enumerated in rdSAP"
-GLAZED_AREA_ENUMS = ["NO DATA!","Less Than Typical", "Normal", "More Than Normal",
- "Much More Than Normal"]
-rgDataSet.apply{|data|
-	data[:GLAZED_AREA] = GLAZED_AREA_ENUMS.find_index data[:GLAZED_AREA]
-}
-###############################################
-
-Lpr.d "Do multiglazed portion"
-rgDataSet.apply{|data|
-	unless data[:MULTI_GLAZE_PROPORTION].to_s.match(/\d/)
-		data[:MULTI_GLAZE_PROPORTION] = 0
-	end
-}
-###############################################
-
-Lpr.d "Flag number of heated rooms / inhabitable rooms for cleansing"
-rgDataSet.apply{|data|
-	unless data[:MULTI_GLAZE_PROPORTION].to_s.match(/\d/)
-		data[MULTI_GLAZE_PROPORTION] = 0
+	case data[:MECHANICAL_VENTILATION]
+	when "mechanical, extract only"
+		data[:MECHANICAL_EXTRACT] = 1
+	when  "mechanical, supply and extract"
+		data[:MECHANICAL_EXTRACT] = 1
+		data[:MECHANICAL_SUPPLY] = 1
 	end
 }
 
-Lpr.d "Do window *constructions* (LOL)"
-Lpr.d "WARNING: Just kidding, there's no explicit window u-value or g-values"
-###############################################
-
-Lpr.d "OK! Do all the _ENERGY_EFF enumerated values"
-QUALITY_ENUMS = ["Very Poor", "Poor", "Average", "Good", "Very Good"]
-[:HOT_WATER_ENERGY_EFF, :LIGHTING_ENERGY_EFF, :ROOF_ENERGY_EFF, 
- :WALLS_ENERGY_EFF, :WINDOWS_ENERGY_EFF, :MAINHEAT_ENERGY_EFF].each{|effKey|
-	rgDataSet.apply{|data|
-		if data[effKey] == "N/A"
-			data[effKey] = 0
-		else
-			data[effKey] =QUALITY_ENUMS.find_index data[effKey]
-		end
-	}
-}
-###############################################
-
-Lpr.d "Do heat loss corridor stuff"
-HEAT_LOSS_CORRIDOOR_ENUMS = [ "heated corridor", "unheated corridor"]
-rgDataSet.apply{|data|
-	if data[:HEAT_LOSS_CORRIDOOR] == "NO DATA!"
-		data[:HEAT_LOSS_CORRIDOOR] = 0
-	elsif data[:HEAT_LOSS_CORRIDOOR] == "no corridor"
-		data[:HEAT_LOSS_CORRIDOOR] = 0
-	else
-		data[:HEAT_LOSS_CORRIDOOR] = HEAT_LOSS_CORRIDOOR_ENUMS.find_index data[:HEAT_LOSS_CORRIDOOR]
-	end
-}
-###############################################
-
-Lpr.d "Do mechanical ventilation"
-rgDataSet.enumerate :MECHANICAL_VENTILATION
-###############################################
-
-Lpr.d "Do lighting fixture stuff"
-rgDataSet.apply{|data|
-	unless data[:LOW_ENERGY_FIXED_LIGHT_COUNT].to_s.match(/\d/)
-		data[:LOW_ENERGY_FIXED_LIGHT_COUNT] = 0
-	end
-	unless data[:FIXED_LIGHTING_OUTLETS_COUNT].to_s.match(/\d/)
-		data[:FIXED_LIGHTING_OUTLETS_COUNT] = 0
-	end
-}
-###############################################
-
-
+# Hot water system
 Lpr.d "Do hot water description"
 Lpr.d "WARNING: This is a bugger since hot water is the primary indicator of residential consumption"
-Lpr.d "WARING: Cont'd. I'd wager decision trees handle enums fine, not line reg (see other discussion)"
+Lpr.d "WARING: Cont'd. I'd wager decision trees would handle enums fine, not line reg (see other discussion)"
 rgDataSet.enumerate :HOTWATER_DESCRIPTION
 
+# Main fuel
 Lpr.d "Do mains fuel"
 Lpr.d "WARNING: Like hot water + there's a lot of values here but we probably only need 4"
 Lpr.d "NOTE: All we really need is a CO2 factor roughly"
@@ -260,118 +211,230 @@ rgDataSet.apply{|data|
 		data[:MAIN_FUEL] = -1
 	end
 }
-###############################################
-
-
-Lpr.d "Prepare ROOM data cleansing flags. Can't calculate without data!!!"
-rgDataSet.apply{|data|
-	unless data[:NUMBER_HABITABLE_ROOMS].to_s.match(/\d/)
-		data[:NUMBER_HABITABLE_ROOMS] = false
-	end
-	unless data[:NUMBER_HEATED_ROOMS].to_s.match(/\d/)
-		data[:NUMBER_HEATED_ROOMS] = false
-	end
-}
-###############################################
-
+# Main heating controls 
 Lpr.d "Finally: Fix and enumerate heating controls"
 rgDataSet.enumerate :MAIN_HEATING_CONTROLS
-###############################################
 
+#Situation
+rgDataSet.injectFeatures({	IS_DETACHED: 0, 
+							IS_END: 0, 
+							IS_MID: 0})
+rgDataSet.apply{|data|
+	case data[:BUILT_FORM].to_s
+	when "Detached"
+		data[:IS_DETACHED] = 1
+	when "Mid-Terrace"
+		data[:IS_MID] = 1
+	when "End-Terrace"
+		data[:IS_END] = 1
+	when "Semi-Detached"
+		data[:IS_END] = 1
+	when "Enclosed Mid-Terrace"
+		data[:IS_MID] = 1
+	when "Enclosed End-Terrace"
+		data[:IS_END] = 1
+	end
+}
+rgDataSet.dropFeatures [:BUILT_FORM]
+# Extensions
+Lpr.d "Do extension count. It's dirty! (add missing values)**"
+rgDataSet.apply{|data|
+	unless data[:EXTENSION_COUNT].to_s.match(/\d/)
+		data[:EXTENSION_COUNT] = 0
+	end
+}
+# Top floor of flat?
+Lpr.d "Do is top storey"
+rgDataSet.apply{|data|data[:FLAT_TOP_STOREY] = data[:FLAT_TOP_STOREY].downcase == "y" ? 1 : 0}
 
-Lpr.p "###
-# Moment of truth. Dump the data and make sure it's good to go
-###"
+# Floor level
+Lpr.d "Do is it bottom, top or anywhere else floor of flat"
+rgDataSet.injectFeatures({IS_BASEMENT: 0, IS_ROOF: 0})
+rgDataSet.apply{|data|
+	case data[:FLOOR_LEVEL].to_s
+	when /basement/i
+		data[:IS_BASEMENT] = 1
+	when /ground/i
+		data[:FLOOR_LEVEL] = 0
+	when /top/i
+		data[:IS_ROOF] = 1
+	else
+		data[:FLOOR_LEVEL] = 1
+	end
+}
+# Heat loss corridor
+Lpr.d "Do heat loss corridor stuff"
+rgDataSet.apply{|data|
+	if data[:HEAT_LOSS_CORRIDOOR] == "NO DATA!"
+		data[:HEAT_LOSS_CORRIDOOR] = 0
+	elsif data[:HEAT_LOSS_CORRIDOOR] == "no corridor"
+		data[:HEAT_LOSS_CORRIDOOR] = 0
+	else
+		data[:HEAT_LOSS_CORRIDOOR] = HEAT_LOSS_CORRIDOOR_ENUMS.find_index data[:HEAT_LOSS_CORRIDOOR]
+	end
+}
+rgDataSet.dropFeatures [:FLOOR_LEVEL]
+## Services
+Lpr.d "Do low energy lighting patch"
+rgDataSet.apply{|data|
+	if ! data[:LOW_ENERGY_LIGHTING].to_s.match(/\d/) 
+		data[:LOW_ENERGY_LIGHTING] = 0
+	end
+}
+# Heating
+Lpr.d "Do heating system has tank"
+rgDataSet.injectFeatureByFunction(:HAS_TANK){|data| 
+	data[:MAINHEAT_DESCRIPTION].match(/boiler|storage/i) ? 1: 0
+}
+rgDataSet.enumerate :MAINHEAT_DESCRIPTION
+### Service efficiency
+Lpr.d "Do service / material efficiencies"
+QUALITY_FEATURES.each{|feature|
+	rgDataSet.apply{|data|
+		data[feature] = QUALITY_ENUMS.find_index(data[feature]) || -1
+	}
+}
+
+### Glazing and fabric
+# Glazing
+Lpr.d "Do glazing U and g values"
+labelKey 		= glazingTypes.features.first
+rgDataSet.injectFeatures({GLASS_U_VALUE: 0, GLASS_G_VALUE: 0})
+rgDataSet		= rgDataSet.select{|data| data[:GLAZED_TYPE] != "INVALID!"}
+rgDataSet.apply{|data|
+	if data[:GLAZED_TYPE].match(/double/i)
+		gType = glazingTypes.find{|gType| data[:GLAZED_TYPE].downcase.match(/double/i) && data[:GLAZED_TYPE].downcase.match(gType[:When])}
+	else
+		gType = glazingTypes.find{|gType| data[:GLAZED_TYPE].downcase.match(gType[labelKey])}
+	end
+	data[:GLASS_U_VALUE] = gType[:U_Value]
+	data[:GLASS_G_VALUE] = gType[:g_Value]
+}
+# rgDataSet.dropFeatures [:GLAZED_TYPE]
+
+Lpr.d "Do glazing area adjustment"
+rgDataSet.injectFeatureByFunction(:GLAZING_SIZE_FACTOR){|data|
+	case data[:GLAZED_AREA]
+	when /less/i
+		-1
+	when /normal/i
+		0
+	when /more/i
+		1
+	end
+}
+rgDataSet.dropFeatures [:GLAZED_AREA]
+# Roof
+Lpr.d "Do roof U values"
+labelKey 		= roofTypes.features.first
+rgDataSet.injectFeatureByFunction(:ROOF_U_VALUE){|data|
+	roofAgeRecord = roofTypes.find{|rData| data[:AGE_LABEL] == rData[labelKey]}
+	case data[:ROOF_DESCRIPTION]
+	when /pitch/i
+		data[:ROOF_U_VALUE] = roofAgeRecord[:U_Value_Pitched]
+	when /flat/i
+		data[:ROOF_U_VALUE] = roofAgeRecord[:U_Value_Flat]
+	when /room/i
+		data[:ROOF_U_VALUE] = roofAgeRecord[:U_Value_Pitched]
+	else # Adiabtic 
+		data[:ROOF_U_VALUE] = 0
+	end
+}
+rgDataSet.dropFeatures [:ROOF_DESCRIPTION]
+
+# Floor
+Lpr.d "Do floor U Values"
+labelKey	= floorTypes.features.first
+rgDataSet.injectFeatureByFunction(:FLOOR_U_VALUE){|data|
+	floorType = floorTypes.find{|fData| fData[floorTypes.features.first] == data[:AGE_LABEL]}
+	case data[:FLOOR_DESCRIPTION]
+	when /no\s|assumed|insulated/i
+		floorType[:U_Value_Unknown]
+	when /50 mm/
+		floorType[:U_Value_50mm]
+	when /100 mm/
+		floorType[:U_Value_100mm]
+	when /200 mm/
+		floorType[:U_Value_150mm]
+	when /other premise|dwelling/i #Adiabatic
+		0
+	end
+}
+# External envelopes
+labelKey = wallTypes.features.first
+rgDataSet.injectFeatureByFunction(:WALL_U_VALUE){|data|
+	wallType = wallTypes.find{|wData|
+		data[:WALLS_DESCRIPTION].downcase.match(wData[labelKey].downcase) && 
+		data[:WALLS_DESCRIPTION].downcase.match(wData[:Insulation].downcase)
+	}
+	wallType[data[:AGE_LABEL].to_sym]
+}
+rgDataSet.dropFeatures [:WALLS_DESCRIPTION]
+### Geometry
+Lpr.d "Do window area"
+labelKey	= windowParams.features.first
+rgDataSet.injectFeatureByFunction(:WINDOW_AREA){|data|
+	# Find label to link tables
+	windowFuncParams = windowParams.find{|wData| wData[labelKey] == data[:AGE_LABEL]}
+	#Identify building type
+	if data[:PROPERTY_TYPE].match(/house|bungalow/i)
+		data[:TOTAL_FLOOR_AREA] * windowFuncParams[:house] + windowFuncParams[:house_plus]
+	else
+		data[:TOTAL_FLOOR_AREA] * windowFuncParams[:flat] + windowFuncParams[:flat_plus]
+	end 
+}
 rgDataSet.toCSVGem TEMP_PATH
 
 
-###############################################
-# Do the filtering and what not
-###############################################
 
-Lpr.p"###
-# Rinse the data's mouth out with soap!
-#
-# There's three data integrity concerns we need to deal with
-# when proving the model with incomplete data, beyond previous
-# collation.
-#
-# 1) Duplicate data: If the model is just predicting what it's 
-#	 seen then it's pointless
-# 2) Unknown feature values: Some features like constructions 
-#	 implicitly have associated values, u-value in their
-#	 case. In rdSAP most have a u-value in the name
-#	 or if it's external walls, an age band lookup
-#	 table. Those that don't however, need new rough values.
-#	 Initially, I guessed but that'll on ruin the dream of an
-#	 easy life, so we'll just filter them out for now. Worry
-#	 about finding rough values for them if generally works.
-# 3) Incomplete data
-# 
-# So here, we're going to filter out some stuff 
-###"
 
-Lpr.d "Dataset size: #{rgDataSet.length}"
-rgDataSet = rgDataSet.select{|data| data[:NUMBER_HEATED_ROOMS] && data[:NUMBER_HABITABLE_ROOMS]}
-Lpr.d "Dataset size: #{rgDataSet.length} after filtering undefined room conditions"
 
-Lpr.p "###
-#  Let's train something, see what the damage is!
-###"
 
-modelData 		= rgDataSet.segregate([FEATURES, TARGET].flatten.uniq)
-modelData.dropFeatures [:FLAT_TOP_STOREY]
 
-models			= modelData.split 0.15
-train			= models.first
-test			= models.last
-testTargetRgDS	= test.segregate [TARGET]
-testTargets		= test.retrieveFeatureAsArray TARGET, true
 
+
+####
+Lpr.p "
 ##
-# Train model
-## 
-# puts ObjectSpace.each_object(Class).select { |klass| klass < OllieMlSupervisedBase} 
-Lpr.d "Training model"
-[EPSRegressor].each{|modelClass|
-	Lpr.d "Training: #{modelClass.name}"
-	
-	model 		= modelClass.new modelData, TARGET, {}
-	model.train
-	Lpr.d "Model trained"
-	
-	testData	= test.clone
-	
-	results 	= model.validateSet test, testTargets, Prediction
-	results.getError.printTable
-	
-	testData 	<< results.toRgDataSet
-	testData 	<< testTargetRgDS
-	testData.toCSVGem OUTPUT_PATH	
-	
-	Lpr.d "Process complete for #{modelClass.name}"
-}
-exit
+# Modify existing features from domestic_features.txt
+# and create new ones.
+##"
 
-puts Dir.pwd
-system "python example.py #{TARGET} #{TEMP_PATH}"
-puts "python example.py #{TARGET} #{TEMP_PATH}"
-exit
 
+
+################################
+# Train model stuff
+################################
+Lpr.p "
 ##
-# Hyperband (not really) Tuner
-##
-tunerParams = [ 
-	TunerParameter.new(:c, 5, 200, true), 
-	TunerParameter.new(:eps, 0.0005, 0.1),
-	TunerParameter.new(:gamma, 0.01, 0.2),
-	TunerParameter.new(:nu, 0.1, 0.5)
-	# TunerSetParameter.new(:kernel_type, ["C-SVC"]),
-	# TunerSetParameter.new(:svm_type, ["one-class SVM","epsilon-SVR"])
-] 
-Lpr.d "Creating tuner"
-hpTuner = HyperbandTuner.new LibSvmRegressor, tunerParams, {}
+# Train a model and test it
+##"
+### Data handling
+Lpr.d "Do data train/test split"
+# Split data into train and test data. Split by the train/test split ratio 
+trainTestData	= rgDataSet.segregate([FEATURES, TARGET].flatten).split(TRAIN_TEST_SPLIT)
+# Assign the first set as the training data
+trainData		= trainTestData.first
+# Assign second set to the test data
+testData		= trainTestData.last
+# Extract the targets from the test data and drop its column from the test data (the machine doesn't need to see)
+testTargets		= testData.retrieveFeatureAsArray TARGET, true
 
-Lpr.d "Tune model"
-hpTuner.tune modelData.first, modelData.last, target
+trainData.toCSVGem "./FIRE.csv"
+puts Lpr.hashToTable ({Train:{Size: trainData.length}, Test: {Size: testData.length}})
+### Model creation and training
+Lpr.d "Do train model"
+# Create new model - third parameter is for passing hyperparameters. Not needed here
+eps				= KNN.new trainData, TARGET, {}
+# Train the model
+eps.train
 
+
+################################
+# Test the model and evaluate performance
+################################
+Lpr.d "Do prediction and present error"
+# Ask the model to predict the target for each test data record
+results			= eps.validateSet testData, testTargets, Prediction
+# Retrieve the error information (ErrorInformation) and print the gist of it
+results.getError.printTable

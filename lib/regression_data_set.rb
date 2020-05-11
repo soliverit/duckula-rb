@@ -238,10 +238,6 @@ class RegressionDataSet
 	def addIndex feature, warning = false
 		feature = feature.to_sym
 		@indices[feature] = {}
-		puts "---"
-		puts feature
-		puts @indices[feature].class
-		puts "==="
 		@hashedData.each{|data|
 			@indices[feature][data[feature]] = data
 		}
@@ -582,7 +578,10 @@ class RegressionDataSet
 				@hashedData[index][feature] = data[fIndex]
 			}
 		}
-		getFeatureBounds
+		nil
+	end
+	def << rgDataSet
+		join rgDataSet
 	end
 	def joinBy rgDataSet, feature
 		output	= self.class.new false, [rgDataSet.features, features].flatten.uniq
@@ -606,6 +605,7 @@ class RegressionDataSet
 		@hashedData.each{|data|
 			return data.dup if yield data
 		}
+		false
 	end
 	##
 	# Return a single dimension array of a keyed value
@@ -679,7 +679,7 @@ class RegressionDataSet
 			newData = []
 			@data.map!{|entry|
 				record = []
-				entry.each_with_index{|val, idx| record.push val if idx != featureIndex}
+				entry.each_with_index.map{|val, idx| record.push val if idx != featureIndex}
 				record
 			}
 			@hashedData.each{|data|
@@ -936,12 +936,12 @@ class RegressionDataSet
 	#
 	# Convert unique values into labels 
 	##
-	def catify feature
+	def enumerate feature
 		@catKeys[feature] 	= []
-		distinct(feature).each{|dFeature| @catKeys[feature].push dFeature}
+		distinct(feature).data.each{|dFeature|@catKeys[feature].push dFeature[0]}
 		featureIDX			= @features.find_index feature
 		@hashedData.each_with_index{|data, idx|
-			catKey 					= @catKeys[feature].find_index data[feature].to_s.to_sym
+			catKey 					= @catKeys[feature].find_index data[feature]
 			data[feature] 			= catKey
 			@data[idx][featureIDX] 	= catKey
 		}
