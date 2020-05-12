@@ -20,7 +20,7 @@ require "json"
 require "./lib/print_helper.rb"
 # Configure to keep tabs on process time
 Lpr.startTimer
-
+Lpr.silentMode 	= ARGV[3] ? true : false
 # Inline data table handling
  ################################
  # Many operations on data are repeated. Might
@@ -85,7 +85,7 @@ GLAZED_AREA_ENUMS	= ["NO DATA!","Less Than Typical", "Normal", "More Than Normal
 
 ### Model
 # Fraction of whole data set used for training, remainder used for testing accuracy
-TRAIN_TEST_SPLIT= 0.25
+TRAIN_TEST_SPLIT= ARGV[2].to_f || 0.25
 # Heat loss corridor states
 HEAT_LOSS_CORRIDOOR_ENUMS = [ "heated corridor", "unheated corridor"]
 ################################
@@ -145,18 +145,17 @@ rgDataSet.apply{|data|
 	end
 }
 # Property type
-rgDataSet.injectFeatures({	IS_FLAT: 0,	IS_HOUSE: 0, 
-							IS_BUNGALOW: 0, IS_MAISONETTE: 0})
+rgDataSet.injectFeatures({	IS_FLAT: 0,	IS_HOUSE: 0})
 rgDataSet.apply{|data|
 	case data[:PROPERTY_TYPE].to_s
 	when "Bungalow"
-		data[:IS_BUNGALOW] = 1
+		data[:IS_HOUSE] = 1
 	when "House"
 		data[:IS_HOUSE] = 1
 	when "Flat" 
 		data[:IS_FLAT] = 1
 	else
-		data[:IS_MAISONETTE] = 1
+		data[:IS_FLAT] = 1
 	end
 }
 # Has gas on site
@@ -310,7 +309,6 @@ rgDataSet.apply{|data|
 	data[:GLASS_U_VALUE] = gType[:U_Value]
 	data[:GLASS_G_VALUE] = gType[:g_Value]
 }
-# rgDataSet.dropFeatures [:GLAZED_TYPE]
 
 Lpr.d "Do glazing area adjustment"
 rgDataSet.injectFeatureByFunction(:GLAZING_SIZE_FACTOR){|data|
@@ -323,7 +321,7 @@ rgDataSet.injectFeatureByFunction(:GLAZING_SIZE_FACTOR){|data|
 		1
 	end
 }
-rgDataSet.dropFeatures [:GLAZED_AREA]
+
 # Roof
 Lpr.d "Do roof U values"
 labelKey 		= roofTypes.features.first
@@ -340,7 +338,6 @@ rgDataSet.injectFeatureByFunction(:ROOF_U_VALUE){|data|
 		data[:ROOF_U_VALUE] = 0
 	end
 }
-rgDataSet.dropFeatures [:ROOF_DESCRIPTION]
 
 # Floor
 Lpr.d "Do floor U Values"
@@ -369,8 +366,9 @@ rgDataSet.injectFeatureByFunction(:WALL_U_VALUE){|data|
 	}
 	wallType[data[:AGE_LABEL].to_sym]
 }
-rgDataSet.dropFeatures [:WALLS_DESCRIPTION]
+
 ### Geometry
+# Windows
 Lpr.d "Do window area"
 labelKey	= windowParams.features.first
 rgDataSet.injectFeatureByFunction(:WINDOW_AREA){|data|
@@ -383,15 +381,17 @@ rgDataSet.injectFeatureByFunction(:WINDOW_AREA){|data|
 		data[:TOTAL_FLOOR_AREA] * windowFuncParams[:flat] + windowFuncParams[:flat_plus]
 	end 
 }
+# Wfr
+Lpr.d "Do wall to floor ratio"
+rgDataSet.injectFeatureByFunction(:WFR){|data|
+	if data[:WINDOW_AREA] != 0
+		data[:WINDOW_AREA] / data[:TOTAL_FLOOR_AREA]
+	else
+		1
+	end
+}
+
 rgDataSet.toCSVGem TEMP_PATH
-
-
-
-
-
-
-
-
 
 ####
 Lpr.p "
@@ -399,8 +399,6 @@ Lpr.p "
 # Modify existing features from domestic_features.txt
 # and create new ones.
 ##"
-
-
 
 ################################
 # Train model stuff
@@ -421,7 +419,7 @@ testData		= trainTestData.last
 testTargets		= testData.retrieveFeatureAsArray TARGET, true
 
 trainData.toCSVGem "./FIRE.csv"
-puts Lpr.hashToTable ({Train:{Size: trainData.length}, Test: {Size: testData.length}})
+# puts Lpr.hashToTable ({Train:{Size: trainData.length}, Test: {Size: testData.length}})
 ### Model creation and training
 Lpr.d "Do train model"
 # Create new model - third parameter is for passing hyperparameters. Not needed here

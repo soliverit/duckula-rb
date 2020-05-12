@@ -1,5 +1,5 @@
 require "rumale"
-require "svmkit"
+# require "svmkit"
 include Rumale
 require "./lib/ollie_ml_supervised_base.rb"
 class KNN < OllieMlSupervisedBase
