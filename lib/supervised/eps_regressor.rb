@@ -26,6 +26,15 @@ class EPSRegressor < OllieMlSupervisedBase
 	def initialize data, target, parameters
 		super(data, target, parameters)
 	end
+	def normaliseSet data
+		featureList = features
+		@trainingData.apply{|data|
+			puts "SHOE"
+			@normaliser.transform([features.map{|feature| data[feature]}]).to_aeach_with_index{|value, idx|			
+				data[features[idx]] = value
+			}
+		}
+	end
 	def train
 		@lr ||= Eps::Regressor.new(@trainingData.getDataStructure(useHash), target: @target)
 	end

@@ -8,10 +8,8 @@ class KNN < OllieMlSupervisedBase
 		super data, target, parameters
 		DEFAULT_PARAMETERS.each{|key, value| @parameters[key] = value if ! @parameters[key]}
 	end
-	def trainingData
-		data 		= @trainingData.segregate(features).data.dup
-		@normaliser	= Preprocessing::MinMaxScaler.new(feature_range: [0.0, 1.0])
-		@normaliser.fit_transform(data)
+	def normaliseSet data
+		@normaliser.transform(data)
 	end
 	def train 
 		@lr			= NearestNeighbors::KNeighborsClassifier.new(DEFAULT_PARAMETERS)

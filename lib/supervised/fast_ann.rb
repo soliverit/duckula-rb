@@ -14,7 +14,7 @@ class FastANN < OllieMlSupervisedBase
 	@@defaultParameters = {
 		max_epochs: 	5000,
 		error_count:	500,
-		max_mse:		80.0,
+		max_mse:		5.0,
 		hidden_neurons: [2, 8, 4, 3, 4],
 		num_outputs:	1
 	}
@@ -55,9 +55,11 @@ class FastANN < OllieMlSupervisedBase
 	# Train the Fast-ANN
 	##
 	def train
+		inputData 					= trainingData
+		@parameters[:num_inputs]	= inputData.first.length
 		@trainer 	= RubyFann::TrainData.new(
-			inputs: 			trainingData, 
-			desired_outputs: 	trainingTarget
+			desired_outputs: 	@trainingData.retrieveFeatureAsArray(@target).map{|value| [value.to_f]},
+			inputs: 			inputData 
 		)
 		@lr			= RubyFann::Standard.new(
 			num_inputs:			@parameters[:num_inputs],
@@ -71,33 +73,6 @@ class FastANN < OllieMlSupervisedBase
 			@parameters[:max_mse].to_f
 		)
 	end
-	def trainingData
-		if @target.class == Symbol
-			output = super.getDataStructure(useHash)
-		elsif @trainingData.class == Array
-			output = @trainingData.dup
-		else
-			output = @trainingData.getDataStructure(useHash)
-		end
-		@parameters[:num_inputs] = output.first.length
-		output
-	end
-	def trainingTarget
-		if @target.class == Symbol
-			output = @trainingData.retrieveFeatureAsArray(@target).map{|val| [val]}
-		else
-			######## WORK IN PROGRESS !! DEAL WITH IMPLICIT TARGETS HERE ######
-			output = @target
-		end
-		@parameters[:num_outputs] = output.first.length
-		output
-	end
-	##
-	# OVERRIDDEN!
-	# Make a prediction
-	#
-	# Unlike everything else, they named predict run.... Sigh.
-	##
 	def predict input
 		@lr.run(input)
 	end

@@ -93,8 +93,7 @@ class RubyLinRegression < OllieMlSupervisedBase
 	def newRegressor
 		@trained		= false
 		@lr 			= RubyLinearRegression.new
-		puts trainingData.getDataStructure(useHash).first
-		@lr.load_training_data trainingData.getDataStructure(useHash), trainingDataAsArray
+		@lr.load_training_data trainingData, trainingTargets
 	end
 	##
 	# Determine if it actual found a working model (is converged the right word here?)

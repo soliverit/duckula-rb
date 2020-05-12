@@ -34,8 +34,11 @@ Lpr.silentMode 	= ARGV[3] ? true : false
 require "./lib/regression_data_set.rb"
 
 # EPSRegressor - linear regression library (OllieMlSupervisedBase)
-require "./lib/supervised/eps_regressor.rb"
-require "./lib/supervised/knn.rb"
+# require "./lib/supervised/eps_regressor.rb"
+# require "./lib/supervised/knn.rb"
+# require "./lib/supervised/lib_svm.rb"
+# require "./lib/supervised/fast_ann.rb"
+require "./configs/supervised.rb"
 # Prediction - store prediction data and inputs
 require "./lib/predictions/prediction.rb"
 
@@ -59,7 +62,7 @@ Lpr.p "
 ###File system
 Lpr.d "Define file system constants"
 DATA_PATH			= ARGV[1]
-INPUT_DATA_PATH		= DATA_PATH + "/input.csv"
+INPUT_DATA_PATH		= DATA_PATH + "/lighting_input.csv"
 TEMP_PATH			= DATA_PATH + "/temp.csv"
 AGE_BAND_PATH		= DATA_PATH + "/age_band_lookup.csv"
 WINDOW_PARAMS_PATH	= DATA_PATH + "/window_parameters.csv"
@@ -96,7 +99,7 @@ Lpr.p "
 # Parse data etc
 ##"
 rgDataSet 		= RegressionDataSet.parseGemCSV INPUT_DATA_PATH
-Lpr.d "Input data loaded"
+Lpr.d "Input data loaded - #{rgDataSet.length} records"
 
 ageBandDataSet	= RegressionDataSet.parseGemCSV AGE_BAND_PATH
 Lpr.d "Age band data loaded"
@@ -171,24 +174,7 @@ rgDataSet.apply{|data|
 		data[:MAINS_GAS_FLAG] = data[:MAIN_FUEL].to_s.match(/gas/i) ? 1 : 0
 	end
 }
-# Ventilation strategy
-Lpr.d "Do ventilation strategy"
-rgDataSet.injectFeatures({MECHANICAL_EXTRACT: 0, MECHANICAL_SUPPLY: 0})
-rgDataSet.apply{|data|
-	case data[:MECHANICAL_VENTILATION]
-	when "mechanical, extract only"
-		data[:MECHANICAL_EXTRACT] = 1
-	when  "mechanical, supply and extract"
-		data[:MECHANICAL_EXTRACT] = 1
-		data[:MECHANICAL_SUPPLY] = 1
-	end
-}
 
-# Hot water system
-Lpr.d "Do hot water description"
-Lpr.d "WARNING: This is a bugger since hot water is the primary indicator of residential consumption"
-Lpr.d "WARING: Cont'd. I'd wager decision trees would handle enums fine, not line reg (see other discussion)"
-rgDataSet.enumerate :HOTWATER_DESCRIPTION
 
 # Main fuel
 Lpr.d "Do mains fuel"
@@ -207,12 +193,12 @@ rgDataSet.apply{|data|
 	when /gas/i
 		data[:MAIN_FUEL] = 0.216
 	else
-		data[:MAIN_FUEL] = -1
-	end
+		data[:MAIN_FUEL] = 0.0	end
 }
 # Main heating controls 
 Lpr.d "Finally: Fix and enumerate heating controls"
 rgDataSet.enumerate :MAIN_HEATING_CONTROLS
+
 
 #Situation
 rgDataSet.injectFeatures({	IS_DETACHED: 0, 
@@ -273,6 +259,10 @@ rgDataSet.apply{|data|
 	end
 }
 rgDataSet.dropFeatures [:FLOOR_LEVEL]
+## Renewables
+
+
+
 ## Services
 Lpr.d "Do low energy lighting patch"
 rgDataSet.apply{|data|
@@ -280,6 +270,24 @@ rgDataSet.apply{|data|
 		data[:LOW_ENERGY_LIGHTING] = 0
 	end
 }
+# Ventilation strategy
+Lpr.d "Do ventilation strategy"
+rgDataSet.injectFeatures({MECHANICAL_EXTRACT: 0, MECHANICAL_SUPPLY: 0})
+rgDataSet.apply{|data|
+	case data[:MECHANICAL_VENTILATION]
+	when "mechanical, extract only"
+		data[:MECHANICAL_EXTRACT] = 1
+	when  "mechanical, supply and extract"
+		data[:MECHANICAL_EXTRACT] = 1
+		data[:MECHANICAL_SUPPLY] = 1
+	end
+}
+
+# Hot water system
+Lpr.d "Do hot water description"
+Lpr.d "WARNING: This is a bugger since hot water is the primary indicator of residential consumption"
+Lpr.d "WARING: Cont'd. I'd wager decision trees would handle enums fine, not line reg (see other discussion)"
+rgDataSet.enumerate :HOTWATER_DESCRIPTION
 # Heating
 Lpr.d "Do heating system has tank"
 rgDataSet.injectFeatureByFunction(:HAS_TANK){|data| 
@@ -381,15 +389,6 @@ rgDataSet.injectFeatureByFunction(:WINDOW_AREA){|data|
 		data[:TOTAL_FLOOR_AREA] * windowFuncParams[:flat] + windowFuncParams[:flat_plus]
 	end 
 }
-# Wfr
-Lpr.d "Do wall to floor ratio"
-rgDataSet.injectFeatureByFunction(:WFR){|data|
-	if data[:WINDOW_AREA] != 0
-		data[:WINDOW_AREA] / data[:TOTAL_FLOOR_AREA]
-	else
-		1
-	end
-}
 
 rgDataSet.toCSVGem TEMP_PATH
 
@@ -423,9 +422,9 @@ trainData.toCSVGem "./FIRE.csv"
 ### Model creation and training
 Lpr.d "Do train model"
 # Create new model - third parameter is for passing hyperparameters. Not needed here
-eps				= KNN.new trainData, TARGET, {}
+machine				= EPSRegressor.new trainData, TARGET, {SKIP_NORMALISE:  true}
 # Train the model
-eps.train
+machine.train
 
 
 ################################
@@ -433,6 +432,17 @@ eps.train
 ################################
 Lpr.d "Do prediction and present error"
 # Ask the model to predict the target for each test data record
-results			= eps.validateSet testData, testTargets, Prediction
+results			= machine.validateSet testData, testTargets, Prediction
 # Retrieve the error information (ErrorInformation) and print the gist of it
 results.getError.printTable
+
+trainData 	<< results.toRgDataSet
+trainData.injectFeatures({TARGET:0})
+i			= 0
+trainData.apply{|data|
+	data[:TARGET] = testTargets[i]
+	i += 1
+}
+trainData.toCSVGem "./PREDICTIONS.csv"
+Lpr.silentMode = false
+Lpr.d "End"

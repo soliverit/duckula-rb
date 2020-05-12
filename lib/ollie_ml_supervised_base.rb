@@ -1,5 +1,7 @@
 require "./lib/ollie_ml_base.rb"
 require_relative "./predictions/prediction_set.rb"
+require "rumale"
+include Rumale
 #################################################################
 # Generate Linear regression models using generic dataset 		#
 # with either standard or gradient descent-based scoring.		#
@@ -84,10 +86,35 @@ class OllieMlSupervisedBase < OllieMlBase
 			trainMinValue
 			trainMaxValue
 		end
+		@normaliser	= Preprocessing::MinMaxScaler.new(feature_range: [0.0, 1.0])
+		@normaliser.fit(@trainingData.segregate(features).data)
 	end
-
-	
-	
+	##
+	# Normalise a 2D array 
+	##
+	def normaliseSet data
+		@normaliser.transform(data).to_a
+	end
+	##
+	# Normalise
+	##
+	def normalise inputs
+		normaliseSet([inputs])
+	end
+	def trainingTargets
+		@trainingData.retrieveFeatureAsArray(@target)
+	end
+	def trainingData
+		data 		= @trainingData.segregate(features).data
+		unless @parameters[:SKIP_NORMALISE]
+			normaliseSet(data)
+		else
+			data
+		end
+	end
+	def trainingTargets
+		data.retrieveFeatureAsArray(@target)
+	end
 	# TrainingDataAsArray
 	#
 	# Output:	Array of training data
@@ -127,7 +154,7 @@ class OllieMlSupervisedBase < OllieMlBase
 		predictionSet = PredictionSet.new self, true
 		inputs.getDataStructure(useHash).each_with_index{|input, index|
 			inputSets = inputToPredictTrackSplit input
-			prediction = inputs.normalise ? RegressionDataSet::inverseNormaliseValue(predict(inputSets[1]), trainMinValue, trainMaxValue) : predict(inputSets[1])
+			prediction =  predict(inputSets[1])
 			predictionSet.push predictionClass.new(inputSets[0], prediction,expectations[index])
 		}
 		predictionSet

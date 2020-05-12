@@ -152,9 +152,7 @@ class LibSvmRegressor < OllieMlSupervisedBase
 	def train
 		return if @lr
 		@problem			= Libsvm::Problem.new
-		tempTrainData		= trainingData
-		targets 			= tempTrainData.normalise ? RegressionDataSet::normaliseArray(data.retrieveFeatureAsArray(@target)) : data.retrieveFeatureAsArray(@target)
-		@problem.set_examples(targets, getTrainingData)
+		@problem.set_examples(data.retrieveFeatureAsArray(@target), getTrainingData)
 		@lr 				= Libsvm::Model.train(@problem, @svmParameters)
 	end
 	##
@@ -189,7 +187,7 @@ class LibSvmRegressor < OllieMlSupervisedBase
 	#
 	##
 	def getTrainingData
-		trainingData.getDataStructure(useHash).map{|data| translateFeatureInput data.map{|value| value}}
+		trainingData.map{|data| Libsvm::Node.features(data)}
 	end
 	##
 	# OVERRIDDEN!
