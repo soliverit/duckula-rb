@@ -34,11 +34,11 @@ Lpr.silentMode 	= ARGV[3] ? true : false
 require "./lib/regression_data_set.rb"
 
 # EPSRegressor - linear regression library (OllieMlSupervisedBase)
-# require "./lib/supervised/eps_regressor.rb"
+require "./lib/supervised/eps_regressor.rb"
 # require "./lib/supervised/knn.rb"
 # require "./lib/supervised/lib_svm.rb"
 # require "./lib/supervised/fast_ann.rb"
-require "./configs/supervised.rb"
+# require "./configs/supervised.rb"
 # Prediction - store prediction data and inputs
 require "./lib/predictions/prediction.rb"
 
@@ -70,6 +70,7 @@ GLAZING_TYPES_PATH	= DATA_PATH + "/glazing_types.csv"
 ROOF_TYPES_PATH		= DATA_PATH + "/roof_constructions.csv"
 FLOOR_TYPES_PATH	= DATA_PATH + "/floor_constructions.csv"
 WALL_TYPES_PATH		= DATA_PATH + "/wall_constructions.csv"
+THERMAL_BRIDGE_PATH	= DATA_PATH + "/thermal_bridging.csv"
 
 ### Features
 Lpr.d "Define feature constants (FEATURES is mutable so not really constant)"
@@ -81,7 +82,7 @@ Lpr.d "Define feature raw data ENUMs"
 
 # All features in QUALITY_FEATURES are enumerated by these values
 QUALITY_ENUMS 		= ["Very Poor", "Poor", "Average", "Good", "Very Good"]
-QUALITY_FEATURES	= [:HOT_WATER_ENERGY_EFF, :LIGHTING_ENERGY_EFF, :ROOF_ENERGY_EFF, 
+QUALITY_FEATURES	= [:SHEATING_ENERGY_EFF, :HOT_WATER_ENERGY_EFF, :LIGHTING_ENERGY_EFF, :ROOF_ENERGY_EFF, 
 						:WALLS_ENERGY_EFF, :WINDOWS_ENERGY_EFF, :MAINHEAT_ENERGY_EFF]
 # # Glazing adjustment factor values ("NO DATA!" will be jimmied in the next video
 GLAZED_AREA_ENUMS	= ["NO DATA!","Less Than Typical", "Normal", "More Than Normal","Much More Than Normal"]
@@ -119,6 +120,9 @@ Lpr.d "Floor thermal properties loaded"
 wallTypes		= RegressionDataSet.parseGemCSV WALL_TYPES_PATH
 Lpr.d "External envelope thermal properties loaded"
 
+thermalBData	= RegressionDataSet.parseGemCSV THERMAL_BRIDGE_PATH
+Lpr.d "Thermal bridging properties loaded"
+
 ################################
 # Feature extraction
 ################################
@@ -126,7 +130,7 @@ Lpr.d "External envelope thermal properties loaded"
 # Construction age band
 Lpr.d "Do construction age band to ENUM"
 labelKey		= ageBandDataSet.features.first #Hack and slash (worry about these later)
-rgDataSet		= rgDataSet.select{|data| ! data[:CONSTRUCTION_AGE_BAND].match(/INVALID|NO DATA/i)}
+rgDataSet		= rgDataSet.select{|data| ! data[:CONSTRUCTION_AGE_BAND].match(/INVALID|NO DATA/i) && data[:CONSTRUCTION_AGE_BAND] != ""}
 rgDataSet.injectFeatureByFunction(:AGE_LABEL){|data|
 	ageRecord	= ageBandDataSet.find{|ageData| data[:CONSTRUCTION_AGE_BAND].match(ageData[labelKey].to_s)}
 	ageRecord[:BAND]
@@ -184,16 +188,25 @@ rgDataSet.apply{|data|
 	case data[:MAIN_FUEL]
 	when /electricity/i
 		data[:MAIN_FUEL] = 0.519
-	when /community/i
-		data[:MAIN_FUEL] = 0.24
 	when /lpg/i
-		data[:MAIN_FUEL] = 0.269
+		data[:MAIN_FUEL] = 0.245
 	when /oil/
-		data[:MAIN_FUEL] = 0.34
+		data[:MAIN_FUEL] = 0.297
 	when /gas/i
 		data[:MAIN_FUEL] = 0.216
+	when /dual/i
+		data[:MAIN_FUEL] = 0.206
+	when /smokeless/i
+		data[:MAIN_FUEL] = 0.392
+	when /coal/i
+		data[:MAIN_FUEL] = 0.291
+	when /no heating/i
+		data[:MAIN_FUEL] = 0
+	when /community/i
+		data[:MAIN_FUEL] = 0.24
 	else
-		data[:MAIN_FUEL] = 0.0	end
+		data[:MAIN_FUEL] = -1	
+	end
 }
 # Main heating controls 
 Lpr.d "Finally: Fix and enumerate heating controls"
@@ -261,7 +274,7 @@ rgDataSet.apply{|data|
 rgDataSet.dropFeatures [:FLOOR_LEVEL]
 ## Renewables
 
-
+rgDataSet.enumerate :PHOTO_SUPPLY
 
 ## Services
 Lpr.d "Do low energy lighting patch"
@@ -293,6 +306,31 @@ Lpr.d "Do heating system has tank"
 rgDataSet.injectFeatureByFunction(:HAS_TANK){|data| 
 	data[:MAINHEAT_DESCRIPTION].match(/boiler|storage/i) ? 1: 0
 }
+
+rgDataSet.apply{|data| 
+	case data[:SECONDHEAT_DESCRIPTION]
+	when /electricity/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.519
+	when /lpg/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.245
+	when /oil/
+		data[:SECONDHEAT_DESCRIPTION] = 0.297
+	when /gas/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.216
+	when /dual/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.206
+	when /smokeless/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.392
+	when /coal/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.291
+	when /no heating/i
+		data[:SECONDHEAT_DESCRIPTION] = 0
+	when /community/i
+		data[:SECONDHEAT_DESCRIPTION] = 0.24
+	else
+		data[:SECONDHEAT_DESCRIPTION] = -1
+	end
+}
 rgDataSet.enumerate :MAINHEAT_DESCRIPTION
 ### Service efficiency
 Lpr.d "Do service / material efficiencies"
@@ -307,10 +345,13 @@ QUALITY_FEATURES.each{|feature|
 Lpr.d "Do glazing U and g values"
 labelKey 		= glazingTypes.features.first
 rgDataSet.injectFeatures({GLASS_U_VALUE: 0, GLASS_G_VALUE: 0})
-rgDataSet		= rgDataSet.select{|data| data[:GLAZED_TYPE] != "INVALID!"}
+rgDataSet		= rgDataSet.select{|data| ! data[:GLAZED_TYPE].match(/NO DATA|INVALID|not defined/)}
 rgDataSet.apply{|data|
 	if data[:GLAZED_TYPE].match(/double/i)
-		gType = glazingTypes.find{|gType| data[:GLAZED_TYPE].downcase.match(/double/i) && data[:GLAZED_TYPE].downcase.match(gType[:When])}
+		gType = glazingTypes.find{|gType| 
+					data[:GLAZED_TYPE].downcase.match(/double/i) && 
+					data[:GLAZED_TYPE].downcase.match(gType[:When])
+				}
 	else
 		gType = glazingTypes.find{|gType| data[:GLAZED_TYPE].downcase.match(gType[labelKey])}
 	end
@@ -366,15 +407,26 @@ rgDataSet.injectFeatureByFunction(:FLOOR_U_VALUE){|data|
 	end
 }
 # External envelopes
+Lpr.d "Do external envelopes"
 labelKey = wallTypes.features.first
 rgDataSet.injectFeatureByFunction(:WALL_U_VALUE){|data|
+	
 	wallType = wallTypes.find{|wData|
 		data[:WALLS_DESCRIPTION].downcase.match(wData[labelKey].downcase) && 
 		data[:WALLS_DESCRIPTION].downcase.match(wData[:Insulation].downcase)
 	}
+	begin
 	wallType[data[:AGE_LABEL].to_sym]
+	rescue
+		puts data[:WALLS_DESCRIPTION]
+		exit
+	end
 }
-
+# Thermal brdiging
+labelKey	= thermalBData.features.first
+rgDataSet.injectFeatureByFunction(:THERMAL_BRIDGING_FACTOR){|data|
+	thermalBData.find{|tbData| tbData[labelKey] == data[:AGE_LABEL]}[:FACTOR]
+}
 ### Geometry
 # Windows
 Lpr.d "Do window area"
@@ -418,7 +470,7 @@ testData		= trainTestData.last
 testTargets		= testData.retrieveFeatureAsArray TARGET, true
 
 trainData.toCSVGem "./FIRE.csv"
-# puts Lpr.hashToTable ({Train:{Size: trainData.length}, Test: {Size: testData.length}})
+puts Lpr.hashToTable ({Train:{Size: trainData.length}, Test: {Size: testData.length}})
 ### Model creation and training
 Lpr.d "Do train model"
 # Create new model - third parameter is for passing hyperparameters. Not needed here
@@ -436,7 +488,7 @@ results			= machine.validateSet testData, testTargets, Prediction
 # Retrieve the error information (ErrorInformation) and print the gist of it
 results.getError.printTable
 
-trainData 	<< results.toRgDataSet
+# trainData 	<< results.toRgDataSet
 trainData.injectFeatures({TARGET:0})
 i			= 0
 trainData.apply{|data|
