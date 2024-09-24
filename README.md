@@ -1,17 +1,18 @@
-# ollieml
-Simplified ML and data handling library for Ruby
+# Duckula - Data science tools for dabblers
 
-### Features
-- Regression
-- Classification
-- Clustering
-- Hyperband hyperparameter tuning
-- Data handling
-- Plotting (work in progress)
+A library for data scientists with little data science or programming experience. Easily create supervised machine learning models, solve optimisation problems, and tune the hyperparameters. 
+
+<table style='border:none;'>
+<tr><td rowspan=5><img src="https://github.com/user-attachments/assets/72bca2ca-352c-4516-b5dd-b4cd3b45f67f" height="250" /></td><td>- Supervised machine learning </td></tr>
+<tr><td> Clustering </td></tr>
+<tr><td> Hyperparameter tuning </td></tr>
+<tr><td> Table data handling</td></tr>
+<tr><td> Plotting</td></tr>
+</table>
 
 # Overview
 
-### OllieML
+### Duckula for Ruby
 
 #### (Use `ruby run_example.rb list` to list ./examples/ then pass a name in "lists"'s place to explore)
 #### The RegressionDataSet and OllieMl supervised models are verbosely commented. Might be helpful at some point
