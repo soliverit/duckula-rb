@@ -3,7 +3,7 @@
 A library for data scientists with little data science or programming experience. Easily create supervised machine learning models, solve optimisation problems, and tune the hyperparameters. 
 
 <table style='border:none;'>
-<tr><td rowspan=5><img src="https://github.com/user-attachments/assets/72bca2ca-352c-4516-b5dd-b4cd3b45f67f" height="250" /></td><td>- Supervised machine learning </td></tr>
+<tr><td rowspan=5><img src="https://github.com/user-attachments/assets/72bca2ca-352c-4516-b5dd-b4cd3b45f67f" height="250" /></td><td>Supervised machine learning </td></tr>
 <tr><td> Clustering </td></tr>
 <tr><td> Hyperparameter tuning </td></tr>
 <tr><td> Table data handling</td></tr>
